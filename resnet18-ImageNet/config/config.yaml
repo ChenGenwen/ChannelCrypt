@@ -1,0 +1,92 @@
+# config/config.yaml
+# ============================================================
+# ResNet18 + CIFAR-10 专用配置
+# ============================================================
+
+# ============================================================
+# 模型配置
+# ============================================================
+model:
+  arch: resnet18
+  num_classes: 1000
+  pretrained: true               # 使用ImageNet预训练         
+
+# ============================================================
+# 数据集配置
+# ============================================================
+dataset:
+  name: imagenet
+  data_dir: D:/Model IP Protection/data        # ImageNet数据集路径
+  batch_size: 128
+  num_workers: 8                 # 改：ImageNet 数据加载更慢，多开线程
+  
+  # ImageNet标准化参数
+  mean: [0.485, 0.456, 0.406] 
+  std: [0.229, 0.224, 0.225]        
+
+  # ImageNet 特有：图像尺寸
+  image_size: 224  # 新增
+# ============================================================
+# 训练配置
+# ============================================================
+training:
+  # Base模型训练
+  epochs_base: 40  
+  lr_base: 0.01     # 保持，但可能需要 warm-up
+  lr_schedule_base:
+    milestones: [10,20,30] 
+    gamma: 0.1
+  
+  # 同质化微调
+  epochs_confuse: 30  
+  lr_confuse: 0.01
+  lr_schedule_confuse:
+    milestones: [15, 25]  # 改
+    gamma: 0.1
+  
+  momentum: 0.9
+  weight_decay: 0.0001  # 改：ImageNet 标准 weight decay
+
+
+# ============================================================
+# 混淆配置
+# ============================================================
+confuse:
+  key: "4a7d1ed414474e4033ac29ccb8653d9b"
+  
+  rho: 0.5
+  # lambda: 0.005
+  lambda: 0.01
+  alpha_hi: 3.0
+  alpha_lo: 1.0
+  eps: 1e-8
+  
+  # 每多少轮计算一次混淆指标
+  metrics_interval: 5
+
+  # 最优模型综合评分权重
+  # score = test_acc - acc_penalty * homogeneity_score
+  # homogeneity_score 越小越好(同质化越好), 所以用负号奖励低值
+  # acc_penalty 控制多愿意牺牲精度换同质化
+  # 建议范围: 0.05~0.5, 较高值更重视同质化
+  acc_penalty: 0.2
+
+# ============================================================
+# 路径配置
+# ============================================================
+paths:
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+  
+  base_model: base_resnet18_imagenet.pth
+  confuse_model: confuse_resnet18_imagenet.pth
+  locked_model: locked_resnet18_imagenet.pth
+  assembled_model: assembled_resnet18_imagenet.pth
+
+# ============================================================
+# 设备配置
+# ============================================================
+device:
+  cuda: true
+  gpu_ids: [0]
+  seed: 42

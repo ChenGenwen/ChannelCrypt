@@ -1,0 +1,93 @@
+# config/config.yaml
+# ============================================================
+# ResNet18 + CIFAR-10 专用配置
+# ============================================================
+
+# ============================================================
+# 模型配置
+# ============================================================
+model:
+  arch: resnet18
+  num_classes: 100
+  pretrained: false              # 不使用ImageNet预训练(从头训练)
+
+# ============================================================
+# 数据集配置
+# ============================================================
+dataset:
+  name: cifar100
+  data_dir: D:/Model IP Protection/data               # CIFAR-10会自动下载到这里
+  batch_size: 128
+  num_workers: 4
+  
+  # CIFAR-100标准化参数
+  mean: [0.5071, 0.4867, 0.4408] 
+  std: [0.2675, 0.2565, 0.2761]
+
+# ============================================================
+# 训练配置
+# ============================================================
+training:
+  # Base模型训练
+  epochs_base: 300              # CIFAR-10从头训练通常需要200轮
+  lr_base: 0.1
+  lr_schedule_base:
+    milestones: [120, 200, 260]      # 第120，200,260轮衰减
+    gamma: 0.1
+
+  # 同质化微调
+  epochs_confuse: 60
+  lr_confuse: 0.01               # 微调用小学习率
+  lr_schedule_confuse:
+    milestones: [20, 40]         # 后移，保证前40轮有充分梯度
+    gamma: 0.1
+  
+  # 优化器
+  momentum: 0.9
+  weight_decay: 0.001
+  
+  # 监控
+  validate_interval: 1           # 每轮都验证(CIFAR-10很快)
+
+# ============================================================
+# 混淆配置
+# ============================================================
+confuse:
+  key: "4a7d1ed414474e4033ac29ccb8653d9b"
+  
+  rho: 0.5
+  # lambda: 0.005
+  lambda: 0.01
+  alpha_hi: 3.0
+  alpha_lo: 1.0
+  eps: 1e-8
+  
+  # 每多少轮计算一次混淆指标
+  metrics_interval: 5
+
+  # 最优模型综合评分权重
+  # score = test_acc - acc_penalty * homogeneity_score
+  # homogeneity_score 越小越好(同质化越好), 所以用负号奖励低值
+  # acc_penalty 控制多愿意牺牲精度换同质化
+  # 建议范围: 0.05~0.5, 较高值更重视同质化
+  acc_penalty: 0.2
+
+# ============================================================
+# 路径配置
+# ============================================================
+paths:
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+  
+  base_model: base_resnet18_cifar100.pth
+  confuse_model: confuse_resnet18_cifar100.pth
+  locked_model: locked_resnet18_cifar100.pth
+  assembled_model: assembled_resnet18_cifar100.pth
+
+# ============================================================
+# 设备配置
+# ============================================================
+device:
+  cuda: true
+  gpu_ids: [0]
+  seed: 42
