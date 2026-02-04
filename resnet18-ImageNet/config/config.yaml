@@ -64,12 +64,6 @@ confuse:
   # 每多少轮计算一次混淆指标
   metrics_interval: 5
 
-  # 最优模型综合评分权重
-  # score = test_acc - acc_penalty * homogeneity_score
-  # homogeneity_score 越小越好(同质化越好), 所以用负号奖励低值
-  # acc_penalty 控制多愿意牺牲精度换同质化
-  # 建议范围: 0.05~0.5, 较高值更重视同质化
-  acc_penalty: 0.2
 
 # ============================================================
 # 路径配置
