@@ -17,7 +17,7 @@ model:
 dataset:
   name: imagenet
   data_dir: D:/Model IP Protection/data        # ImageNet数据集路径
-  batch_size: 128
+  batch_size: 64
   num_workers: 8                 # 改：ImageNet 数据加载更慢，多开线程
   
   # ImageNet标准化参数
@@ -31,18 +31,18 @@ dataset:
 # ============================================================
 training:
   # Base模型训练
-  epochs_base: 40  
+  epochs_base: 100  
   lr_base: 0.01     # 保持，但可能需要 warm-up
   lr_schedule_base:
     milestones: [10,20,30] 
     gamma: 0.1
   
   # 同质化微调
-  epochs_confuse: 30  
-  lr_confuse: 0.01
+  epochs_confuse: 60  
+  lr_confuse: 0.0001
   lr_schedule_confuse:
     milestones: [15, 25]  # 改
-    gamma: 0.1
+    gamma: 1
   
   momentum: 0.9
   weight_decay: 0.0001  # 改：ImageNet 标准 weight decay

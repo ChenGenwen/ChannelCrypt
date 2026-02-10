@@ -1,17 +1,13 @@
 """
 接口层配置
-定义WideResNet-50-2中需要处理的卷积层+BN层对
-只处理layer4（最靠近输出的关键层）
-
-WideResNet-50-2 结构：
-- layer4 有 3 个 Bottleneck 块
-- 每个 Bottleneck 的 conv2 (3×3) 输出 1024 通道
-- 使用块大小 64，每层得到 16 个块
+定义 WideResNet-50-2 中需要处理的卷积层+BN层对
+只处理 layer4 的 3 个 conv2 层（1024通道，块大小64）
 """
 
-# ============================================================
-# WideResNet-50-2 接口配置（仅layer4）
-# ============================================================
+import torch.nn as nn
+
+
+# WideResNet-50-2 接口层配置（固定配置，不使用自动发现）
 INTERFACES = {
     'wideresnet50_2': {
         'layers': [
@@ -25,114 +21,75 @@ INTERFACES = {
 }
 
 
-def get_interface_config(arch='wideresnet50_2'):
+def get_interface_config(arch='wideresnet50_2', model=None):
     """
     获取接口配置
     
     Args:
-        arch: 模型架构名称（目前只支持'wideresnet50_2'）
+        arch: 模型架构名称
+        model: 模型实例（此参数保留是为了兼容性，实际不使用）
     
     Returns:
         dict: {
             'layers': [(conv_name, bn_name, block_size), ...],
             'arch': 'wideresnet50_2',
         }
-    
-    Raises:
-        ValueError: 如果架构不支持
     """
     if arch not in INTERFACES:
-        raise ValueError(f"Unsupported architecture: {arch}. Only 'wideresnet50_2' is supported.")
+        raise ValueError(f"Unsupported architecture: {arch}")
     
-    return INTERFACES[arch]
+    # 直接返回预定义的配置
+    return INTERFACES[arch].copy()
 
 
 def validate_interface_config(model, config):
     """
     验证接口配置是否与模型匹配
-    检查:
-    1. 层是否存在
-    2. 通道数是否能被块大小整除
-    
-    Args:
-        model: PyTorch模型
-        config: get_interface_config返回的配置
-    
-    Raises:
-        ValueError: 如果配置不合法
     """
-    import torch.nn as nn
-    
-    print("\nValidating interface configuration...")
+    print(f"\nValidating interface configuration...")
+    print(f"Found {len(config['layers'])} interface layers:")
     
     for conv_name, bn_name, block_size in config['layers']:
-        # 获取所有模块
-        modules_dict = dict(model.named_modules())
-        
-        # 1. 检查conv层是否存在
+        # 显示配置的层
+        print(f"  - {conv_name} + {bn_name}, block_size={block_size}")
+    
+    # 获取所有模块
+    modules_dict = dict(model.named_modules())
+    
+    for conv_name, bn_name, block_size in config['layers']:
+        # 1. 检查 conv 层
         if conv_name not in modules_dict:
             raise ValueError(f"Conv layer '{conv_name}' not found in model")
         conv = modules_dict[conv_name]
         
-        # 检查是否是Conv2d
         if not isinstance(conv, nn.Conv2d):
             raise ValueError(f"'{conv_name}' is not nn.Conv2d, got {type(conv)}")
         
-        # 2. 检查bn层是否存在
+        # 2. 检查 bn 层
         if bn_name not in modules_dict:
             raise ValueError(f"BN layer '{bn_name}' not found in model")
         bn = modules_dict[bn_name]
         
-        # 检查是否是BatchNorm2d
         if not isinstance(bn, nn.BatchNorm2d):
             raise ValueError(f"'{bn_name}' is not nn.BatchNorm2d, got {type(bn)}")
         
-        # 3. 检查通道数是否能被块大小整除
+        # 3. 检查通道数
         num_channels = conv.weight.shape[0]
         if num_channels % block_size != 0:
             raise ValueError(
                 f"Layer {conv_name}: num_channels={num_channels} not divisible by "
-                f"block_size={block_size}. Remainder: {num_channels % block_size}"
+                f"block_size={block_size}"
             )
         
-        # 计算块数
-        num_blocks = num_channels // block_size
+        # 4. 验证匹配
+        if bn.num_features != num_channels:
+            raise ValueError(
+                f"Channel mismatch: {conv_name} has {num_channels} channels "
+                f"but {bn_name} has {bn.num_features} features"
+            )
         
+        num_blocks = num_channels // block_size
         print(f"  ✓ {conv_name}: {num_channels} channels, "
               f"block_size={block_size}, num_blocks={num_blocks}")
     
     print("Interface configuration validated successfully!\n")
-
-
-# ============================================================
-# 使用示例和测试
-# ============================================================
-if __name__ == '__main__':
-    import torch
-    import torchvision.models as models
-    
-    print("="*60)
-    print("Testing Interface Configuration")
-    print("="*60)
-    
-    # 1. 获取配置
-    config = get_interface_config('wideresnet50_2')
-    print(f"\nArchitecture: {config['arch']}")
-    print(f"Number of layers to process: {len(config['layers'])}")
-    print("\nLayers:")
-    for conv_name, bn_name, block_size in config['layers']:
-        print(f"  - {conv_name} + {bn_name}, block_size={block_size}")
-    
-    # 2. 创建WideResNet-50-2模型并验证
-    print("\n" + "-"*60)
-    print("Creating WideResNet-50-2 model...")
-    model = models.wide_resnet50_2(weights=None)
-    
-    # 3. 验证配置
-    try:
-        validate_interface_config(model, config)
-        print("✅ All tests passed!")
-    except Exception as e:
-        print(f"❌ Validation failed: {e}")
-    
-    print("="*60)

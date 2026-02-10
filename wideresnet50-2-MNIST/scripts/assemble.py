@@ -92,7 +92,7 @@ def main():
     # ============================================================
     # 1. 加载配置
     # ============================================================
-    config_path = 'config/config.yaml'
+    config_path = r'D:\Model IP Protection\locked\wideresnet50-2-MNIST\config\config.yaml'
     config = load_config(config_path)
     
     print("="*60)

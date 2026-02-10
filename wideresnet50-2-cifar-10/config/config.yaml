@@ -18,7 +18,7 @@ model:
 dataset:
   name: cifar10
   data_dir: D:/Model IP Protection/data               # CIFAR-10会自动下载到这里
-  batch_size: 256                # WRN50-2较大，减小batch size避免OOM
+  batch_size: 128                # WRN50-2较大，减小batch size避免OOM
   num_workers: 4
   
   # CIFAR-10标准化参数
@@ -30,7 +30,7 @@ dataset:
 # ============================================================
 training:
   # Base模型训练
-  epochs_base: 100              # WRN50-2收敛较慢，建议200轮
+  epochs_base: 200              # WRN50-2收敛较慢，建议200轮
   lr_base: 0.001                 # Adam 推荐学习率（比SGD小一个数量级）
   lr_schedule_base:
     milestones: [30, 70]   # 学习率衰减点

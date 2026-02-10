@@ -1,5 +1,5 @@
 """
-训练Confuse模型
+训练Confuse模型 (ResNet18 + ImageNet)
 在base模型基础上添加同质化损失进行微调
 每隔TEST_INTERVAL轮在测试集上验证，自动保存最佳模型（纯 test_acc）
 每隔METRICS_INTERVAL轮评估混淆指标并输出对比表
@@ -44,51 +44,50 @@ def load_config(config_path: str) -> dict:
 
 def get_data_loaders(config: dict):
     """
-    创建数据加载器
+    创建ImageNet数据加载器
     
     Returns:
         train_loader, test_loader
     """
     mean = config['dataset']['mean']
     std = config['dataset']['std']
-    
-        # ===== 根据数据集名称选择不同的变换 =====
     dataset_name = config['dataset']['name']
     
-    if dataset_name == 'imagenet':
-        # ImageNet 数据增强
-        transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(224),  # 随机裁剪到 224×224
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
-        
-        transform_test = transforms.Compose([
-            transforms.Resize(256),  # 先 resize 到 256
-            transforms.CenterCrop(224),  # 中心裁剪到 224
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
-        
-        # ImageNet 数据集路径结构：
-        # imagenet/
-        #   train/
-        #     n01440764/
-        #       xxx.JPEG
-        #   val/
-        #     n01440764/
-        #       xxx.JPEG
-        
-        data_dir = config['dataset']['data_dir']
-        trainset = torchvision.datasets.ImageFolder(
-            root=os.path.join(data_dir, 'train'),
-            transform=transform_train
-        )
-        testset = torchvision.datasets.ImageFolder(
-            root=os.path.join(data_dir, 'val'),
-            transform=transform_test
-        )
+    if dataset_name != 'imagenet':
+        raise ValueError(f"train_confuse.py only supports ImageNet, got {dataset_name}")
+    
+    # ImageNet 数据增强 (224×224)
+    transform_train = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+    
+    # ImageNet 测试变换
+    transform_test = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+    
+    # 数据路径（修复：添加 imagenet 层级）
+    data_dir = config['dataset']['data_dir']
+    train_path = os.path.join(data_dir, 'imagenet', 'train')
+    val_path = os.path.join(data_dir, 'imagenet', 'val')
+    
+    print(f"Loading training data from: {train_path}")
+    print(f"Loading validation data from: {val_path}")
+    
+    trainset = torchvision.datasets.ImageFolder(
+        root=train_path,
+        transform=transform_train
+    )
+    testset = torchvision.datasets.ImageFolder(
+        root=val_path,
+        transform=transform_test
+    )
     
     batch_size = config['dataset']['batch_size']
     num_workers = config['dataset']['num_workers']
@@ -101,6 +100,9 @@ def get_data_loaders(config: dict):
         testset, batch_size=batch_size, shuffle=False,
         num_workers=num_workers, pin_memory=True
     )
+    
+    print(f"Training samples: {len(trainset):,}")
+    print(f"Validation samples: {len(testset):,}")
     
     return train_loader, test_loader
 
@@ -247,22 +249,29 @@ def evaluate_confuse_metrics(block_manager, key_manager, device, rho):
         norm_list = [phi_norm[i] for i in range(g)]
 
         # 原始特征的指标
-        raw_sim  = ConfuseMetrics.compute_intra_similarity(raw_list, S)
+        raw_sim = ConfuseMetrics.compute_intra_similarity(raw_list, S)
         raw_homo = ConfuseMetrics.compute_layer_homogeneity(raw_list)
 
         # 归一化特征的指标
-        norm_sim  = ConfuseMetrics.compute_intra_similarity(norm_list, S)
+        norm_sim = ConfuseMetrics.compute_intra_similarity(norm_list, S)
         norm_homo = ConfuseMetrics.compute_layer_homogeneity(norm_list)
 
+        # 组装结果
         metrics_summary[layer_name] = {
             'raw': {
                 'homogeneity': raw_homo,
-                **raw_sim,
+                'overall_similarity': raw_sim['overall_similarity'],
+                'selected_similarity': raw_sim['selected_similarity'],
+                'unselected_similarity': raw_sim['unselected_similarity'],
+                'cross_similarity': raw_sim['cross_similarity'],
             },
             'normalized': {
                 'homogeneity': norm_homo,
-                **norm_sim,
-            },
+                'overall_similarity': norm_sim['overall_similarity'],
+                'selected_similarity': norm_sim['selected_similarity'],
+                'unselected_similarity': norm_sim['unselected_similarity'],
+                'cross_similarity': norm_sim['cross_similarity'],
+            }
         }
 
     return metrics_summary
@@ -270,33 +279,28 @@ def evaluate_confuse_metrics(block_manager, key_manager, device, rho):
 
 def print_metrics_table(base_metrics, current_metrics):
     """
-    按层输出指标对比表（5 列）：
-        Metric | Base(origin) | Current(origin) | Base(normalized) | Current(normalized)
-
-    每行指标均匀填充 base 和 current 的 raw / normalized 值。
-
+    打印混淆指标对比表（4列格式）
+    
     Args:
-        base_metrics: base 模型基准，与 evaluate_confuse_metrics 同结构
-                      {layer: {'raw': {...}, 'normalized': {...}}}
-        current_metrics: 当前 epoch 的评估结果，同结构
+        base_metrics: 基准（base模型）指标
+        current_metrics: 当前（训练中）指标
     """
     metric_order = [
         'homogeneity',
         'overall_similarity',
         'selected_similarity',
         'unselected_similarity',
-        'cross_similarity',
+        'cross_similarity'
     ]
-    # 列宽
-    col_metric = 28
-    col_val    = 18
 
+    col_metric = 24
+    col_val = 12
     header = (
         f"{'Metric':<{col_metric}}"
         f"{'Base(origin)':>{col_val}}"
         f"{'Current(origin)':>{col_val}}"
-        f"{'Base(normalized)':>{col_val}}"
-        f"{'Current(normalized)':>{col_val}}"
+        f"{'Base(norm)':>{col_val}}"
+        f"{'Current(norm)':>{col_val}}"
     )
     sep = '-' * len(header)
 
@@ -401,7 +405,7 @@ def main():
     # ============================================================
     # 5. 创建数据加载器
     # ============================================================
-    print("\nLoading CIFAR-10 dataset...")
+    print("\nLoading ImageNet dataset...")
     train_loader, test_loader = get_data_loaders(config)
 
     # ============================================================
@@ -542,6 +546,7 @@ def main():
     print(f"Best model saved to: {config['paths']['checkpoint_dir']}/{config['paths']['confuse_model']}")
     print(f"Best test accuracy: {logger.best_acc:.2f}% at epoch {logger.best_epoch}")
     print("=" * 60)
+    print("\nNext step: Run lock.py to apply protection mechanism")
 
 
 if __name__ == '__main__':

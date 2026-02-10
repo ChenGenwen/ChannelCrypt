@@ -1,0 +1,90 @@
+# config/config.yaml
+# ============================================================
+# GoogLeNet + CIFAR-10 专用配置
+# ============================================================
+
+# ============================================================
+# 模型配置
+# ============================================================
+model:
+  arch: googlenet
+  num_classes: 10
+  pretrained: false              # 不使用ImageNet预训练(从头训练)
+
+# ============================================================
+# 数据集配置
+# ============================================================
+dataset:
+  name: cifar10
+  data_dir: D:/Model IP Protection/data               # CIFAR-10会自动下载到这里
+  batch_size: 128
+  num_workers: 4
+  
+  # CIFAR-10标准化参数
+  mean: [0.4914, 0.4822, 0.4465]
+  std: [0.2023, 0.1994, 0.2010]
+
+# ============================================================
+# 训练配置
+# ============================================================
+training:
+  # Base模型训练
+  # GoogLeNet比ResNet18更深更复杂，建议增加训练轮数
+  epochs_base: 350              # 从头训练GoogLeNet通常需要更多轮数
+  lr_base: 0.01
+  lr_schedule_base:
+    milestones: [150, 250, 310]      # 在这些epoch衰减学习率
+    gamma: 0.1
+  
+  # 同质化微调
+  # 参考ResNet18的配置，但可能需要根据实际效果调整
+  epochs_confuse: 60
+  lr_confuse: 0.01               # 微调用小学习率
+  lr_schedule_confuse:
+    milestones: [20, 40]         # 保证前40轮有充分梯度
+    gamma: 0.1
+  
+  # 优化器
+  momentum: 0.9
+  weight_decay: 0.0005
+  
+  # 监控
+  validate_interval: 1           # 每轮都验证(CIFAR-10很快)
+
+# ============================================================
+# 混淆配置
+# ============================================================
+confuse:
+  key: "4a7d1ed414474e4033ac29ccb8653d9b"
+  
+  rho: 0.5
+  # lambda权重建议根据实验调整
+  # GoogLeNet有8个接口层(ResNet18只有4个)，损失贡献更大
+  # 可能需要减小lambda以平衡task_loss和confuse_loss
+  lambda: 0.005                  # 如果confuse_loss过大，可以降到0.003
+  alpha_hi: 2.0
+  alpha_lo: 1.0
+  eps: 1e-8
+  
+  # 每多少轮计算一次混淆指标
+  metrics_interval: 5
+
+# ============================================================
+# 路径配置
+# ============================================================
+paths:
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+  
+  base_model: base_googlenet_cifar10.pth
+  confuse_model: confuse_googlenet_cifar10.pth
+  locked_model: locked_googlenet_cifar10.pth
+  assembled_model: assembled_googlenet_cifar10.pth
+
+# ============================================================
+# 设备配置
+# ============================================================
+device:
+  cuda: true
+  gpu_ids: [0]
+  seed: 42

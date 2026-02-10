@@ -1,0 +1,84 @@
+# config/config.yaml
+# ============================================================
+# VGG16-BN + ImageNet 配置
+# ============================================================
+
+# ============================================================
+# 模型配置
+# ============================================================
+model:
+  arch: vgg16_bn
+  num_classes: 1000
+  pretrained: true  # 使用ImageNet预训练权重
+
+# ============================================================
+# 数据集配置
+# ============================================================
+dataset:
+  name: imagenet
+  data_dir: D:/Model IP Protection/data  # 自动拼接 imagenet/train 和 imagenet/val
+  batch_size: 16  # VGG16较大,减小batch size
+  num_workers: 8
+  
+  # ImageNet标准化参数
+  mean: [0.485, 0.456, 0.406] 
+  std: [0.229, 0.224, 0.225]
+
+# ============================================================
+# 训练配置
+# ============================================================
+training:
+  # Base模型训练
+  epochs_base: 50
+  lr_base: 0.001  # VGG16使用较小学习率
+  lr_schedule_base:
+    milestones: [20, 35]
+    gamma: 0.1
+  
+  # Confuse微调
+  epochs_confuse: 40
+  lr_confuse: 0.0001  # 更小的学习率用于微调
+  lr_schedule_confuse:
+    milestones: [15, 25]
+    gamma: 1
+  
+  momentum: 0.9
+  weight_decay: 0.0005  # VGG16使用稍大的weight decay
+
+# ============================================================
+# 混淆配置
+# ============================================================
+confuse:
+  key: "4a7d1ed414474e4033ac29ccb8653d9b"
+  
+  # VGG16-BN接口配置
+  min_channels: 512  # 只处理512通道的层
+  block_size: 32     # 块大小(512可被32整除,得到16个块)
+  
+  rho: 0.5
+  lambda: 0.005  # 根据你的经验,使用0.005
+  alpha_hi: 3.0
+  alpha_lo: 1.0
+  eps: 1e-8
+  
+  metrics_interval: 5
+
+# ============================================================
+# 路径配置
+# ============================================================
+paths:
+  checkpoint_dir: ./checkpoints
+  log_dir: ./logs
+  
+  base_model: base_vgg16bn_imagenet.pth
+  confuse_model: confuse_vgg16bn_imagenet.pth
+  locked_model: locked_vgg16bn_imagenet.pth
+  assembled_model: assembled_vgg16bn_imagenet.pth
+
+# ============================================================
+# 设备配置
+# ============================================================
+device:
+  cuda: true
+  gpu_ids: [0]
+  seed: 42

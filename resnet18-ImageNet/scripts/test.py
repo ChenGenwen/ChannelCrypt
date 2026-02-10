@@ -4,12 +4,14 @@
   - locked 模型应该准确率很低（保护生效）
   - assembled 模型应该准确率恢复（可逆性验证）
 
+使用 Top-5 准确率作为评估指标（ImageNet标准）
+
 运行方式:
     python test.py
 
 输出:
   - 控制台: 逐模型的测试进度 + 结果 + 分析
-  - logs/test_log.csv: test_acc(locked), test_acc(assembled)
+  - logs/test_log.csv: test_acc_top5(locked), test_acc_top5(assembled)
 """
 
 import os
@@ -55,9 +57,10 @@ def get_test_loader(config: dict):
             transforms.Normalize(mean, std),
         ])
         
+        # 修复：添加 imagenet 层级
         data_dir = config['dataset']['data_dir']
         testset = torchvision.datasets.ImageFolder(
-            root=os.path.join(data_dir, 'val'),
+            root=os.path.join(data_dir, 'imagenet', 'val'),
             transform=transform_test
         )
     
@@ -80,19 +83,21 @@ def get_test_loader(config: dict):
 
 def test_model(model, test_loader, device):
     """
-    测试模型准确率
+    测试模型准确率（使用Top-5准确率）
 
     Returns:
-        accuracy (%), loss
+        top5_accuracy (%), loss
     """
     model.eval()
 
     criterion = nn.CrossEntropyLoss()
     total_loss = 0.0
-    correct = 0
+    correct_top5 = 0
     total = 0
 
     print(f"\nTesting on ImageNet validation set ({len(test_loader.dataset)} samples)...")
+    print("Using Top-5 accuracy metric...")
+    
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(test_loader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -101,61 +106,65 @@ def test_model(model, test_loader, device):
             loss = criterion(outputs, targets)
 
             total_loss += loss.item()
-            _, predicted = outputs.max(1)
+            
+            # 计算 Top-5 准确率
+            _, pred_top5 = outputs.topk(5, dim=1, largest=True, sorted=True)
+            targets_expanded = targets.view(-1, 1).expand_as(pred_top5)
+            correct_top5 += pred_top5.eq(targets_expanded).sum().item()
+            
             total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
 
             # 显示进度
             if (batch_idx + 1) % 50 == 0:
-                acc = 100.0 * correct / total
-                print(f"  Batch [{batch_idx+1}/{len(test_loader)}] Acc: {acc:.2f}%")
+                acc_top5 = 100.0 * correct_top5 / total
+                print(f"  Batch [{batch_idx+1}/{len(test_loader)}] Top-5 Acc: {acc_top5:.2f}%")
 
-    accuracy = 100.0 * correct / total
+    top5_accuracy = 100.0 * correct_top5 / total
     avg_loss = total_loss / len(test_loader)
 
-    return accuracy, avg_loss
+    return top5_accuracy, avg_loss
 
 
-def print_results(model_tag: str, accuracy: float, avg_loss: float):
+def print_results(model_tag: str, top5_accuracy: float, avg_loss: float):
     """
     打印单个模型的结果横幅 + 分析块
 
     Args:
         model_tag: 'locked' 或 'assembled'
-        accuracy: 测试准确率 (%)
+        top5_accuracy: Top-5测试准确率 (%)
         avg_loss: 平均损失
     """
     print("\n" + "=" * 60)
     print(f"{model_tag.upper()} Model Test Results")
     print("=" * 60)
     print(f"Test Loss: {avg_loss:.4f}")
-    print(f"Test Accuracy: {accuracy:.2f}%")
+    print(f"Top-5 Accuracy: {top5_accuracy:.2f}%")
     print("=" * 60)
 
     print("\n📊 Expected Performance & Analysis:")
     if model_tag == 'locked':
-        print("  Expected: ~0.1% (random guess level for 1000 classes)")
+        print("  Expected: ~0.5% (random guess Top-5 for 1000 classes)")
         print("  Purpose: Verify that protection mechanism works")
         print("  Analysis: Without the correct key, the model is unusable")
-        if accuracy > 1.0:
-            print("  ⚠️  Warning: Accuracy too high! Protection may be ineffective.")
+        if top5_accuracy > 5.0:
+            print("  ⚠️  Warning: Top-5 accuracy too high! Protection may be ineffective.")
             print("     Check that lock.py was run correctly.")
-        elif accuracy < 0.05:
-            print("  ⚠️  Warning: Accuracy suspiciously low (below random).")
+        elif top5_accuracy < 0.1:
+            print("  ⚠️  Warning: Top-5 accuracy suspiciously low (below random).")
             print("     Model might be broken. Check lock.py implementation.")
         else:
             print("  ✅ Protection effective: model is unusable without key")
 
     elif model_tag == 'assembled':
-        print("  Expected: ~69-70% (recovered, should match confuse model)")
+        print("  Expected: ~89-90% (recovered, should match confuse model)")
         print("  Purpose: Verify that recovery mechanism works")
         print("  Analysis: With correct key, performance is restored")
-        if accuracy < 60:
+        if top5_accuracy < 80:
             print("  ⚠️  Warning: Recovery failed or incomplete.")
             print("     Check that:")
             print("     - Correct key is used in assemble.py")
             print("     - Lock and assemble operations are inverse")
-        elif accuracy >= 65:
+        elif top5_accuracy >= 85:
             print("  ✅ Recovery successful: model performance restored")
 
     print("=" * 60)
@@ -166,7 +175,7 @@ def write_test_log(config: dict, acc_locked: float, acc_assembled: float):
     写入 logs/test_log.csv
 
     每次运行追加一行（首次写 header）。
-    字段: timestamp, test_acc(locked), test_acc(assembled)
+    字段: timestamp, test_acc_top5(locked), test_acc_top5(assembled)
     """
     log_dir = config['paths']['log_dir']
     os.makedirs(log_dir, exist_ok=True)
@@ -174,11 +183,11 @@ def write_test_log(config: dict, acc_locked: float, acc_assembled: float):
 
     file_exists = os.path.exists(csv_path)
 
-    fieldnames = ['timestamp', 'test_acc(locked)', 'test_acc(assembled)']
+    fieldnames = ['timestamp', 'test_acc_top5(locked)', 'test_acc_top5(assembled)']
     row = {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'test_acc(locked)': f"{acc_locked:.2f}",
-        'test_acc(assembled)': f"{acc_assembled:.2f}",
+        'test_acc_top5(locked)': f"{acc_locked:.2f}",
+        'test_acc_top5(assembled)': f"{acc_assembled:.2f}",
     }
 
     with open(csv_path, 'a', newline='', encoding='utf-8') as f:
@@ -202,6 +211,7 @@ def main():
     )
     print("=" * 60)
     print("Lock / Assemble Verification Test (ImageNet + ResNet18)")
+    print("Metric: Top-5 Accuracy")
     print("=" * 60)
     print(f"Device: {device}")
 
@@ -296,6 +306,30 @@ def main():
     # 6. 写入 CSV 日志
     # ============================================================
     write_test_log(config, acc_locked, acc_assembled)
+    
+    # ============================================================
+    # 7. 最终总结
+    # ============================================================
+    print("\n" + "=" * 60)
+    print("Verification Test Summary")
+    print("=" * 60)
+    print(f"Locked Model Top-5 Acc:    {acc_locked:.2f}%")
+    print(f"Assembled Model Top-5 Acc: {acc_assembled:.2f}%")
+    print(f"Accuracy Gap:              {acc_assembled - acc_locked:.2f}%")
+    print("=" * 60)
+    
+    if acc_locked < 5.0 and acc_assembled >= 85:
+        print("\n✅ SUCCESS: Protection mechanism is working correctly!")
+        print("   - Locked model is unusable (low Top-5 accuracy)")
+        print("   - Assembled model recovers performance (high Top-5 accuracy)")
+    elif acc_locked >= 5.0:
+        print("\n⚠️  WARNING: Protection may be ineffective!")
+        print("   - Locked model Top-5 accuracy is too high")
+    elif acc_assembled < 85:
+        print("\n⚠️  WARNING: Recovery may be incomplete!")
+        print("   - Assembled model Top-5 accuracy is lower than expected")
+    
+    print("=" * 60)
 
 
 if __name__ == '__main__':

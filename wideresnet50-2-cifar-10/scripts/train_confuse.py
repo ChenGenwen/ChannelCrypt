@@ -392,12 +392,11 @@ def main():
     # ============================================================
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = optim.SGD(
-        model.parameters(),
-        lr=config['training']['lr_confuse'],
-        momentum=config['training']['momentum'],
-        weight_decay=config['training']['weight_decay']
-    )
+    optimizer = optim.Adam(
+    model.parameters(),
+    lr=config['training']['lr_confuse'],
+    weight_decay=config['training']['weight_decay']
+)
 
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer,

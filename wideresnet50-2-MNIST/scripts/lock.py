@@ -2,6 +2,9 @@
 锁定模型
 对训练好的confuse模型应用Q变换和块置换
 生成发布版本的locked模型(未授权用户无法正常使用)
+
+修复说明:
+- rho参数从config读取,不再硬编码
 """
 
 import os
@@ -20,12 +23,12 @@ from core.crypto import KeyManager
 
 def load_config(config_path: str) -> dict:
     """加载配置文件"""
-    with open(config_path, 'r', encoding='utf-8') as f:  # 添加 encoding='utf-8'
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     return config
 
 
-def lock_model(model, block_manager, key_manager, device='cpu'):
+def lock_model(model, block_manager, key_manager, rho, device='cpu'):
     """
     锁定模型
     
@@ -37,6 +40,7 @@ def lock_model(model, block_manager, key_manager, device='cpu'):
         model: PyTorch模型
         block_manager: BlockManager实例
         key_manager: KeyManager实例
+        rho: 选块比例,必须与confuse训练时一致
         device: 设备
     """
     print("\nApplying lock transformations...")
@@ -70,8 +74,8 @@ def lock_model(model, block_manager, key_manager, device='cpu'):
         # ========================================
         print("  [2/2] Applying block permutation...")
         
-        # 生成选块集合S
-        S = key_manager.generate_selection(layer_name, g, rho=0.5)
+        # 生成选块集合S (使用config中的rho)
+        S = key_manager.generate_selection(layer_name, g, rho=rho)
         
         # 生成置换π
         pi = key_manager.generate_permutation(layer_name, S, g)
@@ -88,11 +92,11 @@ def main():
     # ============================================================
     # 1. 加载配置
     # ============================================================
-    config_path = 'config/config.yaml'
+    config_path = r'D:\Model IP Protection\locked\wideresnet50-2-MNIST\config\config.yaml'
     config = load_config(config_path)
     
     print("="*60)
-    print("Locking Confuse Model")
+    print("Locking Confuse Model (WideResNet-50-2 + MNIST)")
     print("="*60)
     
     # ============================================================
@@ -135,11 +139,16 @@ def main():
     # 初始化KeyManager
     key_manager = KeyManager(config['confuse']['key'])
     
+    # 显示关键参数
+    rho = config['confuse']['rho']
+    print(f"\n⚠️  Using rho={rho} (must match confuse training!)")
+    print(f"Key: {config['confuse']['key'][:16]}...")
+    
     # ============================================================
     # 5. 执行锁定操作
     # ============================================================
     with torch.no_grad():  # 锁定操作不需要梯度
-        lock_model(model, block_manager, key_manager, device)
+        lock_model(model, block_manager, key_manager, rho=rho, device=device)
     
     # ============================================================
     # 6. 保存locked模型
@@ -155,13 +164,14 @@ def main():
         'arch': config['model']['arch'],
         'num_classes': config['model']['num_classes'],
         'interface_config': interface_config,
+        'rho': rho,  # 保存rho用于验证
     }, locked_model_path)
     
     print("\n" + "="*60)
     print("Model locked successfully!")
     print("="*60)
     print("\nNote: The locked model has degraded performance without the key.")
-    print("Use assemble.py with the correct key to restore performance.")
+    print("Use scripts/assemble.py with the correct key to restore performance.")
 
 
 if __name__ == '__main__':
