@@ -9,6 +9,7 @@ import sys
 import yaml
 import torch
 import numpy as np
+import time
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -145,9 +146,12 @@ def main():
     # ============================================================
     # 5. 执行恢复操作
     # ============================================================
-    with torch.no_grad():
+    with torch.no_grad():  # 锁定操作不需要梯度
+        t0 = time.perf_counter()
         assemble_model(model, block_manager, key_manager,
-                       rho=config['confuse']['rho'], device=device)
+               rho=config['confuse']['rho'], device=device)
+        t1 = time.perf_counter()
+    print(f"\nLock time: {(t1 - t0) * 1000:.2f} ms")
     
     # ============================================================
     # 6. 保存assembled模型

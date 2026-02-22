@@ -8,6 +8,7 @@ import os
 import sys
 import yaml
 import torch
+import time
 import numpy as np
 
 # 添加项目根目录到路径
@@ -139,7 +140,10 @@ def main():
     # 5. 执行锁定操作
     # ============================================================
     with torch.no_grad():  # 锁定操作不需要梯度
+        t0 = time.perf_counter()
         lock_model(model, block_manager, key_manager, device)
+        t1 = time.perf_counter()
+    print(f"\nLock time: {(t1 - t0) * 1000:.2f} ms")
     
     # ============================================================
     # 6. 保存locked模型

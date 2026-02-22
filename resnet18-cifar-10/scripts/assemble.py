@@ -9,6 +9,7 @@ import sys
 import yaml
 import torch
 import numpy as np
+import time
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -117,13 +118,22 @@ def main():
         raise FileNotFoundError(f"Locked model not found: {locked_model_path}")
     
     print(f"\nLoading locked model from: {locked_model_path}")
-    model = load_model(
-        locked_model_path,
+    checkpoint = torch.load(locked_model_path, map_location=device)
+    state_dict = checkpoint['model_state_dict'] if 'model_state_dict' in checkpoint else checkpoint
+    input_channels = state_dict['conv1.weight'].shape[1]
+
+    from models import create_model
+    model = create_model(
         arch=config['model']['arch'],
         num_classes=config['model']['num_classes'],
-        device=device
+        input_channels=input_channels,
     )
-    print("Locked model loaded successfully!")
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    print(f"  Loaded from epoch {checkpoint.get('epoch', 'unknown')}")
+    if 'test_acc' in checkpoint:
+        print(f"  Test accuracy: {checkpoint.get('test_acc'):.2f}%")
     
     # ============================================================
     # 4. 初始化管理器
@@ -145,9 +155,12 @@ def main():
     # ============================================================
     # 5. 执行恢复操作
     # ============================================================
-    with torch.no_grad():
+    with torch.no_grad():  # 锁定操作不需要梯度
+        t0 = time.perf_counter()
         assemble_model(model, block_manager, key_manager,
-                       rho=config['confuse']['rho'], device=device)
+               rho=config['confuse']['rho'], device=device)
+        t1 = time.perf_counter()
+    print(f"\nLock time: {(t1 - t0) * 1000:.2f} ms")
     
     # ============================================================
     # 6. 保存assembled模型
