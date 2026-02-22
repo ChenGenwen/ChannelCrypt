@@ -20,7 +20,7 @@ import os
 # ============================================================
 # Config
 # ============================================================
-INPUT_DIR  = r"D:\Model IP Protection\locking model scheme\Experiments"
+INPUT_DIR  = r"D:\Model IP Protection\locking model scheme\Experiments\EX-C2\EX-C2b"
 OUTPUT_DIR = INPUT_DIR
 
 TASKS = [
@@ -40,10 +40,10 @@ TASKS = [
     },
 ]
 
-# 4条曲线的颜色与标签（对应 acc(0%), acc(30%), acc(60%), acc(100%)）
-COLORS = ['#eb9794', '#999dcb', '#7dbfa5', '#f4a460']
-LABELS = ['0%', '30%', '60%', '100%']
-COLS   = ['acc(0%)', 'acc(30%)', 'acc(60%)', 'acc(100%)']
+# 4条曲线的颜色与标签（对应 acc(0%), acc(30%), acc(60%), ）
+COLORS = ['#eb9794', '#999dcb', '#7dbfa5']
+LABELS = ['0%', '30%', '60%']
+COLS   = ['acc(0%)', 'acc(30%)', 'acc(60%)']
 
 # ============================================================
 # Global style（与项目其他图保持一致）
