@@ -1,14 +1,14 @@
 """
-EX-C2b — Conservative Attack Experiment
-Plot test accuracy vs. epoch for 4 recovery ratios.
+EX-C2b — Recovery Ratio Experiment
+Plot test accuracy vs. epoch for 4 recovery ratios (0%, 30%, 60%, 100%).
 
 Inputs:
-  EX-C2b1-resnet18-cifar10-fixed_dataset_10__.csv
-  EX-C2b2-resnet18-cifar100-fixed_dataset_10__.csv
+  EX-C2b1/EX-C2b1-resnet18-cifar10.csv
+  EX-C2b2/EX-C2b2-resnet18-cifar100.csv
 
 Outputs:
-  EX-C2b1-resnet18-cifar10.pdf
-  EX-C2b2-resnet18-cifar100.pdf
+  EX-C2b1/EX-C2b1-resnet18-cifar10.pdf
+  EX-C2b2/EX-C2b2-resnet18-cifar100.pdf
 """
 
 import matplotlib
@@ -20,35 +20,44 @@ import os
 # ============================================================
 # Config
 # ============================================================
-INPUT_DIR  = r"D:\Model IP Protection\locking model scheme\Experiments\EX-C2\EX-C2b"
-OUTPUT_DIR = INPUT_DIR
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 TASKS = [
     {
-        'csv':    'EX-C2b1-resnet18-cifar10-fixed_dataset(10%).csv',
-        'output': 'EX-C2b1-resnet18-cifar10.pdf',
-        'title':  'ResNet18 on CIFAR-10',
-        'ylabel': 'Test Accuracy (%)',
-        'ylim':   (5, 40),
+        'csv':    os.path.join(BASE_DIR, 'EX-C2b1',
+                    'EX-C2b1-resnet18-cifar10.csv'),
+        'output': os.path.join(BASE_DIR, 'EX-C2b1',
+                    'EX-C2b1-resnet18-cifar10.pdf'),
+        'ylabel': 'Accuracy (%)',
+        'ylim':   (0, 52),
     },
     {
-        'csv':    'EX-C2b2-resnet18-cifar100-fixed_dataset(10%).csv',
-        'output': 'EX-C2b2-resnet18-cifar100.pdf',
-        'title':  'ResNet18 on CIFAR-100',
-        'ylabel': 'Test Accuracy (%)',
-        'ylim':   (0, 60),
+        'csv':    os.path.join(BASE_DIR, 'EX-C2b2',
+                    'EX-C2b2-resnet18-cifar100.csv'),
+        'output': os.path.join(BASE_DIR, 'EX-C2b2',
+                    'EX-C2b2-resnet18-cifar100.pdf'),
+        'ylabel': 'Accuracy (%)',
+        'ylim':   (0, 62),
     },
 ]
 
-# 4条曲线的颜色与标签（对应 acc(0%), acc(30%), acc(60%), ）
-COLORS = ['#eb9794', '#999dcb', '#7dbfa5']
-LABELS = ['0%', '30%', '60%']
-COLS   = ['acc(0%)', 'acc(30%)', 'acc(60%)']
+# 4 curves
+COLS   = ['0%', '30%', '60%', '100%']
+LABELS = ['0%', '30%', '60%', '100%']
+COLORS = ['#eb9794', '#999dcb', '#7dbfa5', '#e8b84b']
+
+# Sampling
+EPOCH_STEP = 5  # plot every N epochs
+
+# Font sizes
+AXIS_LABEL_FONTSIZE = 15
+LEGEND_FONTSIZE = 10
 
 # ============================================================
-# Global style（与项目其他图保持一致）
+# Global style — Times New Roman
 # ============================================================
 plt.rcParams.update({
+    'font.family': 'Times New Roman',
     'font.size': 10,
     'axes.linewidth': 0.6,
     'axes.edgecolor': '#333333',
@@ -65,8 +74,8 @@ plt.rcParams.update({
 # Draw
 # ============================================================
 def draw_figure(task):
-    csv_path = os.path.join(INPUT_DIR, task['csv'])
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(task['csv'])
+    df = df[(df['epoch'] % EPOCH_STEP == 0) | (df['epoch'] == df['epoch'].min())]
 
     fig, ax = plt.subplots(figsize=(5.0, 3.2))
 
@@ -79,30 +88,30 @@ def draw_figure(task):
             zorder=3,
         )
 
-    ax.set_xlabel('Epoch', fontweight='bold')
-    ax.set_ylabel(task['ylabel'], fontweight='bold')
-    ax.set_xlim(0, 100)
+    ax.set_xlabel('Epoch', fontweight='bold', fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_ylabel(task['ylabel'], fontweight='bold', fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_xlim(0, 150)
     ax.set_ylim(*task['ylim'])
-    ax.set_xticks([0, 15, 30, 45, 60, 75, 90, 100])
+    ax.set_xticks([0, 25, 50, 75, 100, 125, 150])
 
     ax.grid(axis='y')
     ax.set_axisbelow(True)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(True)
+    ax.spines['right'].set_visible(True)
 
-    ax.legend(
+    legend = ax.legend(
         frameon=True,
-        fontsize=8,
-        edgecolor='#cccccc',
+        fontsize=LEGEND_FONTSIZE,
+        edgecolor='#333333',
         framealpha=0.95,
         loc='upper left',
         ncol=1,
     )
+    legend.get_frame().set_linewidth(0.6)
 
-    out_path = os.path.join(OUTPUT_DIR, task['output'])    
-    fig.savefig(out_path, bbox_inches='tight')
+    fig.savefig(task['output'], bbox_inches='tight')
     plt.close(fig)
-    print(f"Saved: {out_path}")
+    print(f"Saved: {task['output']}")
 
 
 # ============================================================

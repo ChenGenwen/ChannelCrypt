@@ -47,7 +47,12 @@ BAR_WIDTH = 0.22
 
 GLOBAL_Y_RANGE = (60, 100)
 
+# Font sizes
+AXIS_LABEL_FONTSIZE = 15
+LEGEND_FONTSIZE = 10
+
 plt.rcParams.update({
+    'font.family': 'Times New Roman',
     'font.size': 10,
     'axes.linewidth': 0.6,
     'axes.edgecolor': '#333333',
@@ -76,7 +81,6 @@ def draw_figure(model_name, output_path):
     fig, ax = plt.subplots(figsize=(6.6, 3.2))
 
     y_lo, y_hi = GLOBAL_Y_RANGE
-    span = y_hi - y_lo
 
     for i in range(n_methods):
         ax.bar(
@@ -93,38 +97,45 @@ def draw_figure(model_name, output_path):
         # value labels
         for j in range(n_datasets):
             v = values[j, i]
+            gap = 0.8
+            if v - y_lo < 10:  # 太靠近底部，标记放柱上方
+                y_pos = v + gap
+                va = 'bottom'
+            else:
+                y_pos = v - gap
+                va = 'top'
             ax.text(
                 x[j] + offsets[i],
-                v + span*0.008,
+                y_pos,
                 f'{v:.2f}',
                 ha='center',
-                va='bottom',
+                va=va,
                 fontsize=10,
                 rotation=90,
                 fontweight='bold'
             )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(DATASETS, fontweight='bold')
+    ax.set_xticklabels(DATASETS, fontweight='bold', fontsize=AXIS_LABEL_FONTSIZE)
 
-    ax.set_ylabel('Accuracy (%)', fontweight='bold')
+    ax.set_ylabel('Accuracy (%)', fontweight='bold', fontsize=AXIS_LABEL_FONTSIZE)
     ax.set_ylim(y_lo, y_hi)
 
     ax.grid(axis='y')
     ax.set_axisbelow(True)
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(True)
+    ax.spines['right'].set_visible(True)
 
     legend = ax.legend(
         frameon=True,
-        fontsize=8,
-        edgecolor='#cccccc',
+        fontsize=LEGEND_FONTSIZE,
+        edgecolor='#333333',
         framealpha=0.95,
-        loc='upper center',
+        loc='upper right',
         ncol=3,
-        bbox_to_anchor=(0.5, 1.18)
     )
+    legend.get_frame().set_linewidth(0.6)
 
     fig.savefig(output_path, bbox_inches='tight')
     plt.close(fig)

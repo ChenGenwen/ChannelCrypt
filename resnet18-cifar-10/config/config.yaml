@@ -40,11 +40,11 @@ training:
   #   epoch30后有效学习率 = 0.0001*lambda(0.005) = 5e-7,
   #   对同质化目标几乎无梯度信号，无法充分收敛。
   # 修改为80轮，milestones后移，让同质化损失有足够的梯度作用时间。
-  epochs_confuse: 60
+  epochs_confuse: 5
   lr_confuse: 0.01               # 微调用小学习率
   lr_schedule_confuse:
-    milestones: [20, 40]         # 后移，保证前40轮有充分梯度
-    gamma: 0.1
+    milestones: []
+    gamma: 1.0
   
   # 优化器
   momentum: 0.9

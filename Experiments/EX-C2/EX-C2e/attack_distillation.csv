@@ -1,0 +1,5 @@
+timestamp,group,query_budget,n_queries,epochs,teacher_acc,student_acc,fidelity
+2026/6/22 18:46,resnet18-cifar-10,0.1,5000,100,7.06,7.64,76.72
+2026/6/22 18:46,resnet18-cifar-10,0.5,25000,100,7.06,7.28,84.04
+2026/6/22 18:52,resnet18-cifar-100,0.1,5000,100,1.19,1.05,77.9
+2026/6/22 18:52,resnet18-cifar-100,0.5,25000,100,1.19,1.1,79.75

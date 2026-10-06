@@ -1,2 +1,0 @@
-timestamp,best_epoch,best_test_acc,lr,epochs,batch_size,weight_decay
-2026-02-06 03:44:49,75,91.84,0.001,200,128,0.0005

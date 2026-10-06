@@ -1,21 +1,22 @@
 """
-Data Ratio Attack Experiment - ResNet18 (CIFAR-10 / CIFAR-100)
+Data Ratio Attack Experiment - ResNet18 (CIFAR-100 / CIFAR-10)
 
 Attack scenario:
   - Permutation recovery is fixed at 50% (floor(0.5 * |S_t|) blocks restored)
   - Q transforms are NOT recovered (no key)
-  - Attacker has varying fractions of training data: 10%, 20%, 30%
+  - Attacker has varying fractions of training data (per-dataset)
   - For each fraction, remaining train data + official test set = evaluation test set
 
 Experiment:
-  For train_fraction in {10%, 20%, 30%}:
+  CIFAR-100: 10%, 20%, 30%, 40%, 50%, 60%  → 6 groups
+  CIFAR-10:  50%, 60%                        → 2 groups
     - Partially restore 50% of permuted blocks (fixed)
-    - Fine-tune all parameters for 100 epochs with fixed lr=1e-6
-    - Test schedule: every epoch for epochs 1-15, then every 3 epochs
+    - Fine-tune all parameters for 150 epochs with fixed lr=1e-6
+    - Test schedule: every 5 epochs
 
-Output CSV (e.g. resnet18-cifar10.csv):
-  Columns: epoch, Acc(10%), Acc(20%), Acc(30%)
-  Written after each fraction completes (columns added left to right).
+Output:
+  EX-C2c2/EX-C2c2-resnet18-cifar100-fixed_shards_repermutation(50%).csv
+  EX-C2c1/EX-C2c1-resnet18-cifar10-fixed_shards_repermutation(50%).csv
 """
 
 import os
@@ -34,54 +35,48 @@ from tqdm.auto import tqdm
 from datetime import datetime
 
 # ============================================================
-# Project root (absolute path)
+# Base paths (computed from script location, no hardcoded absolute paths)
 # ============================================================
-PROJECT_ROOT = r"D:\Model IP Protection\locked\resnet18-cifar-10"
-sys.path.insert(0, PROJECT_ROOT)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))                     # EX-C2c/
+BASE_DIR   = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))  # ChannelCrypt/
+
+# Project roots for imports (both have models/ and core/, either works for sys.path)
+PROJECT_ROOT_C10  = os.path.join(BASE_DIR, 'resnet18-cifar-10')
+PROJECT_ROOT_C100 = os.path.join(BASE_DIR, 'resnet18-cifar-100')
+sys.path.insert(0, PROJECT_ROOT_C10)
 
 from models.interfaces import get_interface_config
 from core.blocks import BlockManager
 from core.crypto import KeyManager
 
 # ============================================================
-# Dataset selection (change only this line)
-# ============================================================
-DATASET = 'cifar10'   # 'cifar10' | 'cifar100'
-
-# ============================================================
-# Dataset config table
-# ============================================================
-DATASET_CONFIG = {
-    'cifar10': {
-        'num_classes':    10,
-        'input_channels': 3,
-        'mean':           (0.4914, 0.4822, 0.4465),
-        'std':            (0.2023, 0.1994, 0.2010),
-        'loader':         torchvision.datasets.CIFAR10,
-    },
-    'cifar100': {
-        'num_classes':    100,
-        'input_channels': 3,
-        'mean':           (0.5071, 0.4867, 0.4408),
-        'std':            (0.2675, 0.2565, 0.2761),
-        'loader':         torchvision.datasets.CIFAR100,
-    },
-}
-
-# ============================================================
-# Paths
+# Dataset config table (locked_model & output_csv are per-dataset)
 # ============================================================
 ARCH     = 'resnet18'
 DATA_DIR = r"D:\Model IP Protection\data"
 
-LOCKED_MODEL_MAP = {
-    'cifar10':  r"D:\Model IP Protection\locked\locked_resnet18_cifar10.pth",
-    'cifar100': r"D:\Model IP Protection\locked\locked_resnet18_cifar100.pth",
+DATASET_CONFIG = {
+    'cifar10': {
+        'num_classes':     10,
+        'input_channels':  3,
+        'mean':            (0.4914, 0.4822, 0.4465),
+        'std':             (0.2023, 0.1994, 0.2010),
+        'loader':          torchvision.datasets.CIFAR10,
+        'locked_model':    os.path.join(PROJECT_ROOT_C10, 'checkpoints', 'locked_resnet18_cifar10.pth'),
+        'output_csv':      os.path.join(SCRIPT_DIR, 'EX-C2c1', 'EX-C2c1-resnet18-cifar10-fixed_shards_repermutation(50%).csv'),
+        'train_fractions': [0.5, 0.6],
+    },
+    'cifar100': {
+        'num_classes':     100,
+        'input_channels':  3,
+        'mean':            (0.5071, 0.4867, 0.4408),
+        'std':             (0.2675, 0.2565, 0.2761),
+        'loader':          torchvision.datasets.CIFAR100,
+        'locked_model':    os.path.join(PROJECT_ROOT_C100, 'checkpoints', 'locked_resnet18_cifar100.pth'),
+        'output_csv':      os.path.join(SCRIPT_DIR, 'EX-C2c2', 'EX-C2c2-resnet18-cifar100-fixed_shards_repermutation(50%).csv'),
+        'train_fractions': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+    },
 }
-LOCKED_MODEL = LOCKED_MODEL_MAP[DATASET]
-
-OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_CSV = os.path.join(OUTPUT_DIR, ARCH + '-' + DATASET + '-data_ratio.csv')
 
 # ============================================================
 # Key
@@ -91,13 +86,11 @@ CONFUSE_KEY = "4a7d1ed414474e4033ac29ccb8653d9b"
 # ============================================================
 # Hyperparameters
 # ============================================================
-TRAIN_FRACTIONS  = [0.4, 0.5, 0.6]   # attacker's data fractions
 FIXED_RECOVERY   = 0.5               # fixed permutation recovery ratio
-RHO              = 0.5               # must match lock.py
+RHO              = 0.5                                 # must match lock.py
 
-FINETUNE_EPOCHS  = 100
-TEST_BOUNDARY    = 15
-TEST_INTERVAL    = 3
+FINETUNE_EPOCHS  = 150
+TEST_INTERVAL    = 5
 FINETUNE_LR      = 1e-6
 FINETUNE_BATCH   = 64
 WEIGHT_DECAY     = 1e-4
@@ -156,9 +149,7 @@ def set_seed(seed):
 
 
 def should_test(epoch):
-    return (epoch <= TEST_BOUNDARY
-            or epoch % TEST_INTERVAL == 0
-            or epoch == FINETUNE_EPOCHS)
+    return epoch % TEST_INTERVAL == 0
 
 
 def build_eval_epochs():
@@ -173,12 +164,12 @@ def col_name(fraction):
     return 'Acc(' + str(int(fraction * 100)) + '%)'
 
 
-def write_csv(curves, eval_epochs):
-    """Overwrite OUTPUT_CSV with all completed fraction columns."""
-    done_fracs = [f for f in TRAIN_FRACTIONS if f in curves]
+def write_csv(curves, eval_epochs, output_csv, train_fractions):
+    """Overwrite output_csv with all completed fraction columns."""
+    done_fracs = [f for f in train_fractions if f in curves]
     fieldnames = ['epoch'] + [col_name(f) for f in done_fracs]
 
-    with open(OUTPUT_CSV, 'w', newline='', encoding='utf-8') as f:
+    with open(output_csv, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for epoch in eval_epochs:
@@ -339,16 +330,16 @@ def evaluate(model, test_loader, criterion, device):
 # ============================================================
 # Single fraction experiment
 # ============================================================
-def run_one_fraction(train_fraction):
+def run_one_fraction(train_fraction, dataset_name):
     """
     Run the full fine-tuning experiment for one train_fraction.
     Returns dict {epoch: test_acc} for all evaluated epochs.
     """
     set_seed(SEED)
 
-    cfg   = DATASET_CONFIG[DATASET]
+    cfg   = DATASET_CONFIG[dataset_name]
     model = load_model(
-        LOCKED_MODEL,
+        cfg['locked_model'],
         arch=ARCH,
         num_classes=cfg['num_classes'],
         input_channels=cfg['input_channels'],
@@ -368,7 +359,7 @@ def run_one_fraction(train_fraction):
 
     # Build data loaders specific to this fraction
     train_loader, test_loader = get_data_loaders(
-        DATASET, DATA_DIR, train_fraction, FINETUNE_BATCH
+        dataset_name, DATA_DIR, train_fraction, FINETUNE_BATCH
     )
     print('  Train samples: ' + str(len(train_loader.dataset))
           + '  |  Test samples: ' + str(len(test_loader.dataset)))
@@ -423,54 +414,64 @@ def main():
     set_seed(SEED)
 
     SEP = '=' * 60
-    print(SEP)
-    print('Data Ratio Attack Experiment')
-    print('  Dataset          : ' + DATASET)
-    print('  Arch             : ' + ARCH)
-    print('  Train fractions  : ' + str([str(int(f * 100)) + '%' for f in TRAIN_FRACTIONS]))
-    print('  Fixed recovery   : ' + str(int(FIXED_RECOVERY * 100)) + '% of permuted blocks')
-    print('  Finetune epochs  : ' + str(FINETUNE_EPOCHS)
-          + '  (every epoch until ' + str(TEST_BOUNDARY)
-          + ', then every ' + str(TEST_INTERVAL) + ')')
-    print('  LR               : ' + str(FINETUNE_LR) + ' (fixed)')
-    print('  Device           : ' + str(DEVICE))
-    print('  Output CSV       : ' + OUTPUT_CSV)
-    print(SEP)
-
-    if not os.path.exists(LOCKED_MODEL):
-        raise FileNotFoundError(
-            'Locked model not found: ' + LOCKED_MODEL + '\n'
-            'Please run lock.py first.'
-        )
-
     eval_epochs = build_eval_epochs()
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    curves = {}
-    for frac in TRAIN_FRACTIONS:
+    DATASETS = ['cifar100', 'cifar10']  # run CIFAR-100 first, then CIFAR-10
+
+    for dataset_name in DATASETS:
+        cfg             = DATASET_CONFIG[dataset_name]
+        locked_model    = cfg['locked_model']
+        output_csv      = cfg['output_csv']
+        output_dir      = os.path.dirname(output_csv)
+        train_fractions = cfg['train_fractions']
+
         print('\n' + SEP)
-        print('  Train fraction = ' + str(int(frac * 100)) + '%')
+        print('Data Ratio Attack Experiment')
+        print('  Dataset          : ' + dataset_name)
+        print('  Arch             : ' + ARCH)
+        print('  Train fractions  : ' + str([str(int(f * 100)) + '%' for f in train_fractions]))
+        print('  Fixed recovery   : ' + str(int(FIXED_RECOVERY * 100)) + '% of permuted blocks')
+        print('  Finetune epochs  : ' + str(FINETUNE_EPOCHS)
+              + '  (test every ' + str(TEST_INTERVAL) + ' epochs)')
+        print('  LR               : ' + str(FINETUNE_LR) + ' (fixed)')
+        print('  Device           : ' + str(DEVICE))
+        print('  Output CSV       : ' + output_csv)
         print(SEP)
 
-        curves[frac] = run_one_fraction(frac)
+        if not os.path.exists(locked_model):
+            raise FileNotFoundError(
+                'Locked model not found: ' + locked_model + '\n'
+                'Please run lock.py first.'
+            )
 
-        write_csv(curves, eval_epochs)
-        print('  CSV updated (' + str(len(curves)) + ' col(s)): ' + OUTPUT_CSV)
+        os.makedirs(output_dir, exist_ok=True)
 
-    # Summary
-    print('\n' + SEP)
-    print('Summary  (best / final  test_acc%)')
-    print(SEP)
-    print('  {:>8}  {:>8}  {:>8}'.format('Frac', 'Best', 'Final'))
-    print('  ' + '-' * 32)
-    for frac in TRAIN_FRACTIONS:
-        log   = curves[frac]
-        best  = max(log.values())
-        final = log[FINETUNE_EPOCHS]
-        print('  {:>7}%  {:>8.2f}  {:>8.2f}'.format(int(frac * 100), best, final))
-    print(SEP)
-    print('\nCSV saved : ' + OUTPUT_CSV)
-    print('Finished  : ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        curves = {}
+        for frac in train_fractions:
+            print('\n' + SEP)
+            print('  Train fraction = ' + str(int(frac * 100)) + '%')
+            print(SEP)
+
+            curves[frac] = run_one_fraction(frac, dataset_name)
+
+            write_csv(curves, eval_epochs, output_csv, train_fractions)
+            print('  CSV updated (' + str(len(curves)) + ' col(s)): ' + output_csv)
+
+        # Summary
+        print('\n' + SEP)
+        print('Summary  (best / final  test_acc%)  [' + dataset_name + ']')
+        print(SEP)
+        print('  {:>8}  {:>8}  {:>8}'.format('Frac', 'Best', 'Final'))
+        print('  ' + '-' * 32)
+        for frac in train_fractions:
+            log   = curves[frac]
+            best  = max(log.values())
+            final = log[FINETUNE_EPOCHS]
+            print('  {:>7}%  {:>8.2f}  {:>8.2f}'.format(int(frac * 100), best, final))
+        print(SEP)
+        print('\nCSV saved : ' + output_csv)
+
+    print('\nFinished  : ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
 if __name__ == '__main__':

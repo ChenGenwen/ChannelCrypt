@@ -52,7 +52,7 @@ def _adapt_resnet_for_small_images(model, input_channels=1):
 
 
 def create_model(arch: str, num_classes: int, pretrained: bool = False,
-                 input_channels: int = 1) -> nn.Module:
+                 input_channels: int = 3) -> nn.Module:
     """
     创建模型
     

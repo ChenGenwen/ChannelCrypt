@@ -35,11 +35,11 @@ training:
     gamma: 0.1
   
   # 同质化微调
-  epochs_confuse: 40
+  epochs_confuse: 5
   lr_confuse: 0.001
   lr_schedule_confuse:
-    milestones: [20, 30]
-    gamma: 0.1
+    milestones: []
+    gamma: 1.0
   
   # 优化器
   momentum: 0.9
